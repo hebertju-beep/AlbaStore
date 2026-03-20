@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cotizador Alba Impresiones 3D</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; color: #1a1a1b; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        h1.logo { text-align: center; color: #1e3a8a; font-size: 2.2em; font-weight: bold; margin-bottom: 5px; }
+        h2.titulo { text-align: center; color: #3b82f6; font-size: 1.4em; margin-bottom: 25px; }
+        h3 { color: #3b82f6; font-size: 1.1em; margin-top: 25px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.85em; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+        .filament-row { background: #eff6ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #3b82f6; }
+        .grid-filament { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.3s; margin-top: 10px; }
+        .btn-add { background: #3b82f6; color: white; }
+        .btn-pdf { background: #10b981; color: white; margin-top: 30px; font-size: 18px; }
+        .image-preview { text-align: center; border: 2px dashed #cbd5e1; padding: 10px; border-radius: 8px; margin-top: 10px; }
+        .image-preview img { max-width: 100%; max-height: 200px; display: none; margin: auto; }
+        .result-box { background: #1e293b; color: #f8fafc; padding: 20px; border-radius: 10px; margin-top: 20px; text-align: center; }
+        .total-amount { font-size: 32px; color: #fbbf24; font-weight: bold; }
+        .desgaste-label { font-weight: bold; color: #fbbf24; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 class="logo">Alba Impresiones 3D</h1>
+    <h2 class="titulo">Calculadora de Trabajo</h2>
+    
+    <div class="grid">
+        <div class="input-group"><label>Cliente:</label><input type="text" id="cliente" placeholder="Nombre"></div>
+        <div class="input-group"><label>Pieza:</label><input type="text" id="pieza" placeholder="Modelo"></div>
+        <div class="input-group"><label>Cantidad:</label><input type="number" id="cantidad" placeholder="1" min="1" value="1" oninput="calcular()"></div>
+    </div>
+
+    <div class="input-group">
+        <label>Imagen de la pieza:</label>
+        <input type="file" accept="image/*" onchange="previsualizarImagen(this)">
+        <div class="image-preview"><img id="preview" src=""></div>
+    </div>
+
+    <h3>1. Material por Color</h3>
+    <div id="lista-filamentos">
+        <div class="filament-row" id="fila-0">
+            <div class="grid-filament">
+                <div class="input-group">
+                    <label>Marca:</label>
+                    <select class="marca" onchange="actualizarPrecio(0)">
+                        <option value="Bambu Lab">Bambu Lab</option>
+                        <option value="Esun">Esun</option>
+                        <option value="Elegoo">Elegoo</option>
+                        <option value="Generico">Generico</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Tipo:</label>
+                    <select class="tipo" onchange="actualizarPrecio(0)">
+                        <option value="PLA">PLA</option>
+                        <option value="PLA Mate">PLA Mate</option>
+                        <option value="PETG">PETG</option>
+                        <option value="TPU">TPU</option>
+                    </select>
+                </div>
+                <div class="input-group"><label>S/. por Kilo:</label><input type="number" class="precio-kg" value="90" oninput="calcular()"></div>
+                <div class="input-group"><label>Gramos:</label><input type="number" class="gramos" placeholder="0" oninput="calcular()"></div>
+            </div>
+        </div>
+    </div>
+    <button class="btn-add" onclick="agregarFilamento()">+ Añadir otro color</button>
+
+    <h3>2. Costo de Operacion</h3>
+    <div class="grid">
+        <div class="input-group"><label>Horas:</label><select id="horas" onchange="calcular()"></select></div>
+        <div class="input-group"><label>Minutos:</label><select id="minutos" onchange="calcular()"></select></div>
+        <div class="input-group"><label>Precio del kWh (S/.):</label><input type="number" id="precioKwh" value="0.90" oninput="calcular()"></div>
+        <div class="input-group"><label>Consumo A1 (kW):</label><input type="number" id="consumoA1" value="0.115" oninput="calcular()"></div>
+        <div class="input-group"><label>Modelado (S/.):</label><input type="number" id="ganancia" value="10" oninput="calcular()"></div>
+        <div class="input-group">
+            <label>Tipo de Impresion:</label>
+            <div id="label-tipo-desgaste" style="padding-top:10px;font-weight:bold;color:#3b82f6;">Monocolor</div>
+        </div>
+        <div class="input-group">
+            <label>Monto por Desgaste (S/.):</label>
+            <div id="label-monto-desgaste" class="desgaste-label" style="padding-top:10px;">0.00</div>
+        </div>
+    </div>
+
+    <div class="result-box">
+        <div>PRECIO TOTAL</div>
+        <div class="total-amount" id="total-display">S/. 0.00</div>
+    </div>
+    
+    <button class="btn-pdf" onclick="generarPDF()">⬇ Descargar Cotizacion PDF</button>
+</div>
+
+<script>
+    const dbPrecios = {
+        "Bambu Lab": {"PLA":65,"PLA Mate":65,"PETG":65,"TPU":65},
+        "Esun":      {"PLA":55,"PLA Mate":0, "PETG":0, "TPU":0},
+        "Elegoo":    {"PLA":0, "PLA Mate":0, "PETG":70,"TPU":0},
+        "Generico":  {"PLA":0, "PLA Mate":0, "PETG":60,"TPU":0}
+    };
+
+    let imagenBase64 = null;
+
+    window.onload = function() {
+        const h = document.getElementById('horas');
+        const m = document.getElementById('minutos');
+        for (let i=0;i<=72;i++) h.options.add(new Option(i+" h",i));
+        for (let i=0;i<=59;i++) m.options.add(new Option(i+" min",i));
+        actualizarPrecio(0);
+    };
+
+    let filaCount = 1;
+
+    function agregarFilamento() {
+        const id = filaCount++;
+        const div = document.createElement('div');
+        div.className = 'filament-row';
+        div.id = 'fila-'+id;
+        div.innerHTML =
+            '<div class="grid-filament">'+
+            '<div class="input-group"><label>Marca:</label><select class="marca" onchange="actualizarPrecio('+id+')"><option value="Bambu Lab">Bambu Lab</option><option value="Esun">Esun</option><option value="Elegoo">Elegoo</option><option value="Generico">Generico</option></select></div>'+
+            '<div class="input-group"><label>Tipo:</label><select class="tipo" onchange="actualizarPrecio('+id+')"><option value="PLA">PLA</option><option value="PLA Mate">PLA Mate</option><option value="PETG">PETG</option><option value="TPU">TPU</option></select></div>'+
+            '<div class="input-group"><label>S/. por Kilo:</label><input type="number" class="precio-kg" oninput="calcular()"></div>'+
+            '<div class="input-group"><label>Gramos:</label><input type="number" class="gramos" oninput="calcular()"></div>'+
+            '</div>';
+        document.getElementById('lista-filamentos').appendChild(div);
+        actualizarPrecio(id);
+    }
+
+    function actualizarPrecio(id) {
+        const fila = document.getElementById('fila-'+id);
+        const m = fila.querySelector('.marca').value;
+        const t = fila.querySelector('.tipo').value;
+        fila.querySelector('.precio-kg').value = dbPrecios[m][t] || 80;
+        calcular();
+    }
+
+    function calcular() {
+        let mat = 0;
+        const filas = document.querySelectorAll('.filament-row');
+        filas.forEach(function(f){
+            const p = parseFloat(f.querySelector('.precio-kg').value)||0;
+            const g = parseFloat(f.querySelector('.gramos').value)||0;
+            mat += (p*g/1000);
+        });
+        const hv = parseInt(document.getElementById('horas').value)||0;
+        const mv = parseInt(document.getElementById('minutos').value)||0;
+        const horas = hv+(mv/60);
+        const kw = parseFloat(document.getElementById('consumoA1').value)||0;
+        const kwh = parseFloat(document.getElementById('precioKwh').value)||0;
+        const luz = kw*horas*kwh;
+        const fd = (filas.length>1)?1.5:1.1;
+        const des = horas*fd;
+        document.getElementById('label-tipo-desgaste').innerText=(filas.length>1)?"Multicolor":"Monocolor";
+        document.getElementById('label-monto-desgaste').innerText=des.toFixed(2);
+        const gan = parseFloat(document.getElementById('ganancia').value)||0;
+        const cantidad = parseInt(document.getElementById('cantidad').value)||1;
+        const total = (mat+luz+des+gan) * cantidad;
+        document.getElementById('total-display').innerText='S/. '+total.toFixed(2);
+    }
+
+    function previsualizarImagen(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e){
+                imagenBase64 = e.target.result;
+                document.getElementById('preview').src = imagenBase64;
+                document.getElementById('preview').style.display = 'block';
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function generarPDF() {
+        const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+        const hoy = new Date();
+        const fecha = hoy.getDate()+' de '+meses[hoy.getMonth()]+' de '+hoy.getFullYear();
+
+        const cliente = document.getElementById('cliente').value || '---';
+        const pieza   = document.getElementById('pieza').value   || '---';
+        const cantidad = parseInt(document.getElementById('cantidad').value)||1;
+        const total   = document.getElementById('total-display').innerText;
+
+        const filas = document.querySelectorAll('.filament-row');
+        const tipo  = (filas.length>1)?'Multicolor':'Monocolor';
+        const badgeColor = (filas.length>1)?'#7c3aed':'#1e3a8a';
+
+        let filamentoHTML = '';
+        filas.forEach(function(f,i){
+            const marca  = f.querySelector('.marca').value;
+            const tp     = f.querySelector('.tipo').value;
+            const gramos = parseFloat(f.querySelector('.gramos').value)||0;
+            filamentoHTML += '<div style="font-size:13px;line-height:1.8;">'+(i+1)+'. '+marca+' '+tp+' &mdash; '+gramos+'g</div>';
+        });
+
+        // Imagen: base64 o placeholder SVG inline
+        let imgTag = '';
+        if (imagenBase64) {
+            imgTag = '<img src="'+imagenBase64+'" style="width:200px;height:200px;object-fit:cover;display:block;">';
+        } else {
+            imgTag = '<div style="width:200px;height:200px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#94a3b8;font-family:Arial;">Sin imagen</div>';
+        }
+
+        // Construir HTML del PDF como string completo
+        const htmlPDF =
+            '<div style="width:680px;padding:40px;box-sizing:border-box;background:white;font-family:Arial,sans-serif;color:#1a1a1a;">'+
+
+            // Encabezado
+            '<div style="text-align:center;border-bottom:3px solid #1e3a8a;padding-bottom:14px;margin-bottom:20px;">'+
+            '<div style="font-size:34px;color:#1e3a8a;font-weight:900;margin:0 0 4px 0;letter-spacing:1px;">Alba Impresiones 3D</div>'+
+            '<div style="font-size:16px;color:#3b82f6;text-transform:uppercase;letter-spacing:4px;">Cotizacion</div>'+
+            '</div>'+
+
+            // Cliente + tipo
+            '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;background:#f8fafc;border:1px solid #cbd5e1;">'+
+            '<tr>'+
+            '<td style="padding:10px 14px;width:50%;border-right:1px solid #cbd5e1;vertical-align:top;">'+
+            '<div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Cliente</div>'+
+            '<div style="font-weight:bold;font-size:15px;color:#1e293b;">'+cliente+'</div>'+
+            '</td>'+
+            '<td style="padding:10px 14px;width:50%;vertical-align:top;">'+
+            '<div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Tipo de Impresion</div>'+
+            '<span style="display:inline-block;padding:3px 14px;border-radius:20px;font-size:12px;font-weight:bold;color:white;background:'+badgeColor+';">'+tipo+'</span>'+
+            '</td>'+
+            '</tr>'+
+            '</table>'+
+
+            // Imagen + datos
+            '<table style="width:100%;border-collapse:collapse;border:1px solid #000;margin-bottom:20px;">'+
+            '<tr>'+
+            '<td style="width:200px;vertical-align:top;border-right:1px solid #000;padding:0;overflow:hidden;">'+
+            imgTag+
+            '</td>'+
+            '<td style="vertical-align:top;padding:0;">'+
+            '<table style="width:100%;border-collapse:collapse;">'+
+            '<tr style="border-bottom:1px solid #000;">'+
+            '<td style="padding:14px;vertical-align:top;">'+
+            '<div style="font-size:10px;color:#64748b;margin-bottom:4px;">Nombre de la Pieza</div>'+
+            '<div style="font-weight:bold;font-size:14px;color:#1e3a8a;">'+pieza+'</div>'+
+            '<div style="font-size:11px;color:#475569;margin-top:4px;">Cantidad: <strong>'+cantidad+'</strong></div>'+
+            '</td>'+
+            '</tr>'+
+            '<tr style="border-bottom:1px solid #000;">'+
+            '<td style="padding:14px;vertical-align:top;">'+
+            '<div style="font-size:10px;color:#64748b;margin-bottom:4px;">Material / Filamento</div>'+
+            filamentoHTML+
+            '</td>'+
+            '</tr>'+
+            '<tr>'+
+            '<td style="padding:14px;vertical-align:middle;">'+
+            '<div style="font-size:10px;color:#64748b;margin-bottom:4px;">Monto Total</div>'+
+            '<div style="font-size:24px;font-weight:900;color:#1e3a8a;">'+total+'</div>'+
+            '</td>'+
+            '</tr>'+
+            '</table>'+
+            '</td>'+
+            '</tr>'+
+            '</table>'+
+
+            // Pie
+            '<div style="text-align:right;font-size:12px;color:#475569;">Piura, '+fecha+'</div>'+
+            '</div>';
+
+        // Crear nodo temporal, añadir al body, capturar, eliminar
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'position:absolute;left:0;top:0;z-index:-9999;';
+        wrapper.innerHTML = htmlPDF;
+        document.body.appendChild(wrapper);
+
+        const node = wrapper.firstChild;
+
+        html2canvas(node, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false
+        }).then(function(canvas) {
+            document.body.removeChild(wrapper);
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.98);
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
+
+            const pageW = pdf.internal.pageSize.getWidth();
+            const pageH = pdf.internal.pageSize.getHeight();
+
+            // Escalar para que quepa en A4
+            const ratio = canvas.width / canvas.height;
+            let w = pageW;
+            let h = w / ratio;
+            if (h > pageH) { h = pageH; w = h * ratio; }
+            const x = (pageW - w) / 2;
+
+            pdf.addImage(imgData, 'JPEG', x, 0, w, h);
+            const cliente = document.getElementById("cliente").value;
+            pdf.save(`Cotizacion_${cliente}.pdf`);
+        });
+    }
+</script>
+</body>
+</html>
